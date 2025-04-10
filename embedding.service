@@ -1,0 +1,15 @@
+[Unit]
+Description=Embedding HTTP Server
+After=network.target
+
+[Service]
+User=andy
+Group=andy
+WorkingDirectory=/media/mass/scripts/embed
+ExecStart=/home/andy/venv_embed/bin/python /media/mass/scripts/embed/main.py
+Restart=always
+RestartSec=10
+Environment="PATH=/home/andy/venv/bin:/usr/bin"
+
+[Install]
+WantedBy=multi-user.target
