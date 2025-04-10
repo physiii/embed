@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Load the model
-model = SentenceTransformer("Alibaba-NLP/gte-Qwen2-1.5B-instruct", trust_remote_code=True)
+# Load the model - using a different model that doesn't require flash_attn
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 class EmbedRequest(BaseModel):
     text: str
@@ -27,7 +27,7 @@ async def create_embedding(request: EmbedRequest):
         logger.info(f"Received embedding request for text: {request.text[:100]}...")  # Log first 100 characters
 
         # Generate the embedding
-        embedding = model.encode([request.text], prompt_name="query")[0]
+        embedding = model.encode(request.text)
         
         # Convert numpy array to list for JSON serialization
         embedding_list = embedding.tolist()

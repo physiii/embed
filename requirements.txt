@@ -1,12 +1,14 @@
 psutil
-flash_attn
+# Removing flash_attn as it causes build issues in Docker
+# flash_attn
 uvicorn==0.22.0
 fastapi==0.95.2
 sentence_transformers==2.7.0
 pydantic==1.10.7
-datasets==2.20.0  # or use the latest version
+datasets==2.20.0
 numpy==1.26.4
-torch  # Let it install the latest compatible version with CUDA
+# Let PyTorch install the latest compatible version with CUDA
+torch
 torchvision
 torchaudio
 -f https://download.pytorch.org/whl/cu121/torch_stable.html
