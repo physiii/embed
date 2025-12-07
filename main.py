@@ -4,6 +4,8 @@ from sentence_transformers import SentenceTransformer
 import uvicorn
 import numpy as np
 import logging
+import os
+import torch
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -11,8 +13,40 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Load the model - using a different model that doesn't require flash_attn
-model = SentenceTransformer("all-MiniLM-L6-v2")
+# Load the model - BGE-large-en-v1.5 for high-quality embeddings
+# Quantization can be controlled via QUANTIZATION environment variable: fp32, fp16, or int8
+quantization = os.getenv("QUANTIZATION", "fp32").lower()
+
+logger.info(f"Loading model with quantization: {quantization.upper()}")
+
+model = SentenceTransformer("BAAI/bge-large-en-v1.5")
+
+# Apply quantization if requested
+if quantization == "fp16":
+    if torch.cuda.is_available():
+        model = model.half()
+        logger.info("Model converted to FP16 (half precision)")
+    else:
+        logger.warning("FP16 on CPU may be slower. Consider INT8 or keeping FP32.")
+        model = model.half()
+elif quantization == "int8":
+    try:
+        # Apply dynamic quantization
+        transformer = model[0].auto_model
+        quantized_model = torch.quantization.quantize_dynamic(
+            transformer,
+            {torch.nn.Linear, torch.nn.LayerNorm},
+            dtype=torch.qint8
+        )
+        model[0].auto_model = quantized_model
+        logger.info("Model quantized to INT8")
+    except Exception as e:
+        logger.error(f"Failed to quantize to INT8: {e}")
+        logger.info("Falling back to FP32")
+elif quantization != "fp32":
+    logger.warning(f"Unknown quantization type: {quantization}. Using FP32.")
+
+model.eval()
 
 class EmbedRequest(BaseModel):
     text: str
@@ -50,6 +84,12 @@ async def startup_event():
             elif 'modelId' in model._model_card_vars:
                 model_info += f" - {model._model_card_vars['modelId']}"
         logger.info(model_info)
+        logger.info(f"Quantization: {quantization.upper()}")
+        logger.info(f"Embedding dimension: {model.get_sentence_embedding_dimension()}")
+        if torch.cuda.is_available():
+            logger.info(f"GPU available: {torch.cuda.get_device_name(0)}")
+        else:
+            logger.info("Running on CPU")
     except Exception as e:
         logger.error(f"Error retrieving model information: {str(e)}")
         logger.info("Model loaded, but unable to retrieve detailed information.")
