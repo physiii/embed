@@ -311,3 +311,5 @@ Where:
 
 BGE-large-en-v1.5 is a **BERT-based, 24-layer transformer model** with 335M parameters, trained using **contrastive learning** to produce high-quality 1024-dimensional embeddings. It excels at semantic search and retrieval tasks, and can be effectively fine-tuned for domain-specific applications with significant performance improvements.
 
+
+

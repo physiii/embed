@@ -6,6 +6,7 @@ import numpy as np
 import logging
 import os
 import torch
+from typing import List
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,7 +20,13 @@ quantization = os.getenv("QUANTIZATION", "fp32").lower()
 
 logger.info(f"Loading model with quantization: {quantization.upper()}")
 
-model = SentenceTransformer("BAAI/bge-large-en-v1.5")
+# Determine device (GPU if available, otherwise CPU)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+logger.info(f"Using device: {device}")
+if device == "cuda":
+    logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+
+model = SentenceTransformer("BAAI/bge-large-en-v1.5", device=device)
 
 # Apply quantization if requested
 if quantization == "fp16":
@@ -54,6 +61,12 @@ class EmbedRequest(BaseModel):
 class EmbedResponse(BaseModel):
     embedding: list[float]
 
+class BatchEmbedRequest(BaseModel):
+    texts: List[str]
+
+class BatchEmbedResponse(BaseModel):
+    embeddings: List[List[float]]
+
 @app.post("/embed", response_model=EmbedResponse)
 async def create_embedding(request: EmbedRequest):
     try:
@@ -73,6 +86,31 @@ async def create_embedding(request: EmbedRequest):
         logger.error(f"Error generating embedding: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/embed_batch", response_model=BatchEmbedResponse)
+async def create_embedding_batch(request: BatchEmbedRequest):
+    if not request.texts:
+        raise HTTPException(status_code=400, detail="No texts provided")
+
+    try:
+        preview = request.texts[0][:100] if request.texts else ""
+        logger.info(f"Received batch embedding request for {len(request.texts)} texts. First text preview: {preview}...")
+
+        # Batch encode all texts in one forward pass
+        with torch.no_grad():
+            embeddings = model.encode(
+                request.texts,
+                convert_to_numpy=True,
+                show_progress_bar=False,
+            )
+
+        embeddings_list = embeddings.tolist()
+        logger.info(f"Successfully generated {len(embeddings_list)} embeddings of length {len(embeddings_list[0]) if embeddings_list else 0}")
+
+        return {"embeddings": embeddings_list}
+    except Exception as e:
+        logger.error(f"Error generating batch embeddings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("Embedding server is starting up...")
@@ -86,10 +124,7 @@ async def startup_event():
         logger.info(model_info)
         logger.info(f"Quantization: {quantization.upper()}")
         logger.info(f"Embedding dimension: {model.get_sentence_embedding_dimension()}")
-        if torch.cuda.is_available():
-            logger.info(f"GPU available: {torch.cuda.get_device_name(0)}")
-        else:
-            logger.info("Running on CPU")
+        logger.info(f"Model device: {next(model.parameters()).device}")
     except Exception as e:
         logger.error(f"Error retrieving model information: {str(e)}")
         logger.info("Model loaded, but unable to retrieve detailed information.")
