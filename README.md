@@ -34,6 +34,14 @@ curl -X POST -H "Content-Type: application/json" -d '{"text":"Hello world"}' htt
 docker-compose down
 ```
 
+## GPU / VRAM verification
+
+- **Embedding service self-report**: `GET /gpu_report` returns the CUDA device, torch allocator usage, and **model weight/parameter size**.
+
+  - Example: `curl http://localhost:8000/gpu_report`
+
+- **Host-wide audit** (recommended): run `python3 gpu_audit.py` to see which GPUs are in use, which containers/processes are consuming VRAM, and the embedding model’s weight size from `/gpu_report`.
+
 ## API Usage
 
 Send a POST request to `/embed` with a JSON payload containing a `text` field:
